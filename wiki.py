@@ -93,7 +93,8 @@ def serve_node(node_name):
             names=[os.path.basename(m) for m in matches]
             res=dir_listing(matches,names)
         elif matches:
-            res=render_file(matches[0])
+            # we need full file path here, not relative to Wiki
+            res=render_file(os.path.join(wiki_base,matches[0]))
 
     return res
 
