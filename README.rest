@@ -11,6 +11,9 @@ Requirements
 ============
 
 * flask
+  
+  * Jinja2
+
 * docutils
 
 
@@ -29,4 +32,17 @@ and execute wiki.py from within my_wiki folder::
   $ python /path/to/wiki.py
 
 point your browser to "localhost:8000" and explore your Wiki
+
+Customization
+=============
+
+Currently if you add folder "templates"::
+
+
+  my_wiki/
+    content/
+    compiled/
+    templates/
+
+under which you can create "dirlist.html" to override default template. More templating is planned in the future.
 

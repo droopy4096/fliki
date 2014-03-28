@@ -7,7 +7,8 @@ import docutils.core
 import re
 import glob
 
-from flask import Flask, Response, send_file
+from flask import Flask, Response, send_file, render_template_string, render_template
+from jinja2 import TemplateNotFound
 
 wiki_base='content'
 wiki_compiled='compiled'
@@ -25,6 +26,26 @@ class Wiki(object):
 
 wiki=Wiki(wiki_base,wiki_compiled)
 app = Flask(__name__)
+
+# render_template
+# render_template_string
+# return render_template('hello.html', name=name)
+
+
+# http://flask.pocoo.org/docs/patterns/streaming/#streaming-from-templates
+def stream_template(template_name, **context):
+    app.update_template_context(context)
+    t = app.jinja_env.get_template(template_name)
+    rv = t.stream(context)
+    rv.enable_buffering(5)
+    return rv
+
+def stream_string_template(template_string, **context):
+    app.update_template_context(context)
+    t = app.jinja_env.from_string(template_string)
+    rv = t.stream(context)
+    rv.enable_buffering(5)
+    return rv
 
 class WikiFile(object):
     def __init__(self,wiki_path,wiki):
@@ -117,13 +138,27 @@ class RstFile(PlainFile):
         with open(fs_compiled_path,'w') as compiled:
             compiled.write(self.unwiki(parts['html_body']))
 
+dir_list_template="""
+<ul>
+{% for node,alias in node_list %}
+<li><a href="/{{ node }}">{{ alias }}</a></li>
+{% endfor %}
+</ul>
+"""
+
+page_template="""{{ contents }}"""
+
 def dir_listing(nodes,aliases=None):
     if aliases:
         names=aliases
     else:
         names=nodes
-    links=['<a href="/%s">%s</a>' % ( n,a ) for n,a in zip(nodes,names) ]
-    return "<ul><li>"+"</li><li>".join(links)+"</li></ul>"
+    node_list=zip(nodes,names)
+    try:
+        node_list=zip(nodes,names)
+        render_template('dirlist.html',node_list=node_list)
+    except TemplateNotFound:
+        return render_template_string(dir_list_template,node_list=node_list)
 
 def listdir(fs_path,prepend=None):
     res=[]
@@ -154,7 +189,7 @@ def render_file(wiki_path):
         return content
 
 @app.route('/')
-def hello_world():
+def root_page():
     return dir_listing(listdir(wiki_base))
 
 @app.route('/<path:node_name>')
