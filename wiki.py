@@ -51,6 +51,7 @@ toolbar = DebugToolbarExtension(app)
 # http://flask.pocoo.org/docs/patterns/streaming/#streaming-from-templates
 def stream_template(template_name, **context):
     app.update_template_context(context)
+    app.logger.debug(str(context))
     t = app.jinja_env.get_template(template_name)
     # rv = t.stream(context)
     rv = t.generate(context)
@@ -86,7 +87,7 @@ class WikiFile(object):
                 # jinja 
                 yield Markup(l)
     
-    def render(self,template=None):
+    def render(self,template=None,**context):
         """
         @template - template file name
         """
@@ -100,11 +101,11 @@ class WikiFile(object):
             self.compile()
         if template:
             try:
-                return stream_template(template,body=self.compiled_iterator())
+                return stream_template(template,body=self.compiled_iterator(),**context)
             except TemplateNotFound:
                 # ok, not found template, fine, fallback to default
                 pass
-        return stream_string_template(page_template,body=self.compiled_iterator())
+        return stream_string_template(page_template,body=self.compiled_iterator(),**context)
         # return self.compiled_iterator()
     
     def unwiki(self,content):
@@ -210,7 +211,7 @@ def render_file(wiki_path):
     if page:
         # we don't want to be rude and disable ALL autoescaping
         ## app.jinja_env.autoescape=False
-        return Response(stream_with_context(page.render(template_name)),mimetype='text/html')
+        return Response(stream_with_context(page.render(template_name,page_title=wiki_path)),mimetype='text/html')
         ## app.jinja_env.autoescape=True
     elif content:
         return content

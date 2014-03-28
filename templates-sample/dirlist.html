@@ -1,0 +1,8 @@
+<p>Page you have requested either does not exist or has multiple alternatives.</p>
+<p>You may select one of the following pages to complete your request</p>
+<ul>
+    {% for node,alias in node_list %}
+    <li><a href="/{{ node }}">{{ alias }}</a></li>
+    {% endfor %}
+</ul>
+
