@@ -99,7 +99,6 @@ class PlainFile(WikiFile):
                     compiled.writelines((self.unwiki(l),))
                 compiled.write('</pre>')
     
-
 class HtmlFile(PlainFile):
     def __init__(self,wiki_path,wiki):
         super(HtmlFile,self).__init__(wiki_path,wiki)
@@ -156,7 +155,7 @@ def dir_listing(nodes,aliases=None):
     node_list=zip(nodes,names)
     try:
         node_list=zip(nodes,names)
-        render_template('dirlist.html',node_list=node_list)
+        return render_template('dirlist.html',node_list=node_list)
     except TemplateNotFound:
         return render_template_string(dir_list_template,node_list=node_list)
 
