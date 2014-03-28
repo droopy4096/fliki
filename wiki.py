@@ -19,14 +19,14 @@ wiki_compiled='compiled'
 wiki_tag_re=re.compile(r'(?<!\[)\[(?P<wikiword>[\w/]+)\|?(?P<humanword>.*?)\](?<=\])')
 
 dir_list_template="""
-<ul>
+<html><body><ul>
 {% for node,alias in node_list %}
 <li><a href="/{{ node }}">{{ alias }}</a></li>
 {% endfor %}
-</ul>
+</ul></body></html>
 """
 
-page_template="""<body>{% for l in body %}{{ l }}{% endfor %}</body> """
+page_template="""<html><body>{% for l in body %}{{ l }}{% endfor %}</body></html>"""
 
 
 class WikiNotImplemented(Exception):
@@ -168,7 +168,7 @@ class RstFile(PlainFile):
             compiled.write(self.unwiki(parts['html_body']))
 
 
-def dir_listing(nodes,aliases=None):
+def dir_listing(nodes,aliases=None,title=None):
     if aliases:
         names=aliases
     else:
@@ -176,13 +176,9 @@ def dir_listing(nodes,aliases=None):
     node_list=zip(nodes,names)
     try:
         node_list=zip(nodes,names)
-        res=render_template('dirlist.html',node_list=node_list)
-        # app.logger.debug(res)
-        return res
+        return render_template('dirlist.html',node_list=node_list,page_title=title)
     except TemplateNotFound:
-        res=render_template_string(dir_list_template,node_list=node_list)
-        # app.logger.debug(res)
-        return res
+        return render_template_string(dir_list_template,node_list=node_list,page_title=title)
 
 def listdir(fs_path,prepend=None):
     res=[]
@@ -218,7 +214,7 @@ def render_file(wiki_path):
 
 @app.route('/')
 def root_page():
-    return dir_listing(listdir(wiki_base))
+    return dir_listing(listdir(wiki_base),title="/")
 
 @app.route('/<path:node_name>')
 def serve_node(node_name):
@@ -229,7 +225,7 @@ def serve_node(node_name):
         if os.path.isdir(fs_full_path):
             nodes=listdir(fs_full_path,prepend=node_name)
             names=[os.path.basename(n) for n in nodes]
-            res=dir_listing(nodes,names)
+            res=dir_listing(nodes,names,title=node_name)
         else:
             # res=render_file(fs_full_path)
             res=render_file(node_name)
@@ -238,7 +234,7 @@ def serve_node(node_name):
         matches=[m[len(wiki_base)+1:] for m in pre_matches]
         if len(matches)>1:
             names=[os.path.basename(m) for m in matches]
-            res=dir_listing(matches,names)
+            res=dir_listing(matches,names,title=node_name)
         elif matches:
             # we need full file path here, not relative to Wiki
             res=render_file(matches[0])
