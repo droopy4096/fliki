@@ -7,12 +7,115 @@ import docutils.core
 import re
 import glob
 
-from flask import Flask
+from flask import Flask, Response, send_file
 
 wiki_base='content'
-wiki_tag_re=re.compile(r'(?P<pre>[^\[])\[(?P<wikiword>.*)\|?(?P<humanword>.*?)\](?P<post>[^\]])')
+wiki_compiled='compiled'
 
+# wiki_tag_re=re.compile(r'(?P<pre>[^\[])\[(?P<wikiword>.*)\|?(?P<humanword>.*?)\](?P<post>[^\]])')
+wiki_tag_re=re.compile(r'(?<!\[)\[(?P<wikiword>[\w/]+)\|?(?P<humanword>.*?)\](?<=\])')
+
+class WikiNotImplemented(Exception):
+    pass
+
+class Wiki(object):
+    def __init__(self,wiki_base_path,wiki_compiled_path):
+        self.base_path=wiki_base_path
+        self.compiled_path=wiki_compiled_path
+
+wiki=Wiki(wiki_base,wiki_compiled)
 app = Flask(__name__)
+
+class WikiFile(object):
+    def __init__(self,wiki_path,wiki):
+        self.wiki=wiki
+        self.path=wiki_path
+    
+    def getContentPath(self):
+        return os.path.join(self.wiki.base_path,self.path)
+    
+    def getCompiledPath(self):
+        return os.path.join(self.wiki.compiled_path,self.path)
+    
+    def compile(self):
+        raise WikiNotImplemented
+    
+    def compiled_iterator(self):
+        with open(self.getCompiledPath(),'r') as f:
+            for l in f:
+                yield l
+    
+    def render(self):
+        fs_compiled_path=self.getCompiledPath()
+        fs_content_path=self.getContentPath()
+        if not os.path.exists(fs_compiled_path):
+            app.logger.debug('force-compiling (does not exist): '+self.path)
+            self.compile()
+        elif os.path.getmtime(fs_compiled_path)<os.path.getmtime(fs_content_path):
+            app.logger.debug('force-compiling (too old): '+self.path)
+            self.compile()
+        return self.compiled_iterator()
+    
+    
+    def unwiki(self,content):
+        unwiki=wiki_tag_re.sub(r'<a href="\g<wikiword>">\g<humanword></a>',content)
+        return unwiki
+
+class PlainFile(WikiFile):
+    def __init__(self,wiki_path,wiki):
+        super(PlainFile,self).__init__(wiki_path,wiki)
+    
+    def compile(self):
+        fs_compiled_path=self.getCompiledPath()
+        fs_content_path=self.getContentPath()
+        fs_compiled_dir=os.path.dirname(fs_compiled_path)
+        if not ( os.path.exists(fs_compiled_dir) and os.path.isdir(fs_compiled_dir) ):
+            os.makedirs(fs_compiled_dir)
+        with open(fs_content_path,'r') as f:
+            with open(fs_compiled_path,'w') as compiled:
+                compiled.write('<pre>')
+                for l in f:
+                    compiled.writelines((self.unwiki(l),))
+                compiled.write('</pre>')
+    
+
+class HtmlFile(PlainFile):
+    def __init__(self,wiki_path,wiki):
+        super(HtmlFile,self).__init__(wiki_path,wiki)
+    
+    def compile(self):
+        fs_compiled_path=self.getCompiledPath()
+        fs_content_path=self.getContentPath()
+        fs_compiled_dir=os.path.dirname(fs_compiled_path)
+        if not ( os.path.exists(fs_compiled_dir) and os.path.isdir(fs_compiled_dir) ):
+            os.makedirs(fs_compiled_dir)
+        with open(fs_content_path,'r') as f:
+            with open(fs_compiled_path,'w') as compiled:
+                for l in f:
+                    compiled.writelines((self.unwiki(l),))
+    
+class RstFile(PlainFile):
+    def __init__(self,wiki_path,wiki):
+        super(RstFile,self).__init__(wiki_path,wiki)
+    
+    def compile(self):
+        fs_compiled_path=self.getCompiledPath()
+        fs_content_path=self.getContentPath()
+        fs_compiled_dir=os.path.dirname(fs_compiled_path)
+        if not ( os.path.exists(fs_compiled_dir) and os.path.isdir(fs_compiled_dir) ):
+            os.makedirs(fs_compiled_dir)
+        
+        node_file = open(fs_content_path, 'r')
+        node_content = node_file.read(-1)
+        node_file.close()
+        # http://docutils.sourceforge.net/docs/howto/security.html
+        heightened_security_settings = {'file_insertion_enabled': 0,
+                                        'raw_enabled': 0}
+        # http://docutils.sourceforge.net/docs/api/publisher.html
+        parts = docutils.core.publish_parts(source=node_content, writer_name='html',
+                                            settings_overrides=heightened_security_settings)
+        with open(fs_compiled_path,'w') as compiled:
+            compiled.write(self.unwiki(parts['html_body']))
 
 def dir_listing(nodes,aliases=None):
     if aliases:
@@ -22,9 +125,9 @@ def dir_listing(nodes,aliases=None):
     links=['<a href="/%s">%s</a>' % ( n,a ) for n,a in zip(nodes,names) ]
     return "<ul><li>"+"</li><li>".join(links)+"</li></ul>"
 
-def listdir(path,prepend=None):
+def listdir(fs_path,prepend=None):
     res=[]
-    for s in os.listdir(path):
+    for s in os.listdir(fs_path):
         if prepend:
             item=os.path.join(prepend,s)
         else:
@@ -32,43 +135,23 @@ def listdir(path,prepend=None):
         res.append(item)
     return res
 
-def render_file(path):
-    fn,fe=os.path.splitext(path)
+def render_file(wiki_path):
+    fs_path=os.path.join(wiki.base_path,wiki_path)
+    fn,fe=os.path.splitext(fs_path)
+    page=None
+    content=None
     if fe in ['.rst','.rest']:
-        return render_rst(path)
+        page=RstFile(wiki_path,wiki)
     elif fe in ['.txt',]:
-        return render_plain(path)
+        page=PlainFile(wiki_path,wiki)
     elif fe in ['.htm','.html']:
-        return render_html(path)
-
-def render_plain(path):
-    res=""
-    with open(path,'r') as f:
-        res=f.read()
-    return res
-
-def render_html(path):
-    res=""
-    with open(path,'r') as f:
-        res=f.read()
-    return res
-
-def render_rst(rst_file):
-    node_file = open(rst_file, 'r')
-    node_content = node_file.read(-1)
-    node_file.close()
-    # http://docutils.sourceforge.net/docs/howto/security.html
-    heightened_security_settings = {'file_insertion_enabled': 0,
-                                    'raw_enabled': 0}
-    # http://docutils.sourceforge.net/docs/api/publisher.html
-    parts = docutils.core.publish_parts(source=node_content, writer_name='html',
-                                        settings_overrides=heightened_security_settings)
-    wiki_content=wikify(parts['html_body'])
-    # r = Response(content=common_header(parts['title']) +os.environ.get('REDIRECT_URL')+ wiki_content + common_footer())
-    return wiki_content
-
-def wikify(content):
-    return wiki_tag_re.sub(r'\g<pre><a href="\g<wikiword>">\g<humanword></a>\g<post>',content)
+        page=HtmlFile(wiki_path,wiki)
+    elif os.path.exists(fs_path):
+        content=send_file(fs_path)
+    if page:
+        return Response(page.render(),mimetype='text/html')
+    elif content:
+        return content
 
 @app.route('/')
 def hello_world():
@@ -76,25 +159,26 @@ def hello_world():
 
 @app.route('/<path:node_name>')
 def serve_node(node_name):
-    full_path=os.path.join(wiki_base,node_name)
-    app.logger.debug(full_path)
+    fs_full_path=os.path.join(wiki_base,node_name)
+    # app.logger.debug(fs_full_path)
     res="Not Found"
-    if os.path.exists(full_path):
-        if os.path.isdir(full_path):
-            nodes=listdir(full_path,prepend=node_name)
+    if os.path.exists(fs_full_path):
+        if os.path.isdir(fs_full_path):
+            nodes=listdir(fs_full_path,prepend=node_name)
             names=[os.path.basename(n) for n in nodes]
             res=dir_listing(nodes,names)
         else:
-            res=render_file(full_path)
+            # res=render_file(fs_full_path)
+            res=render_file(node_name)
     else:
-        pre_matches=glob.glob(full_path+'.*')
+        pre_matches=glob.glob(fs_full_path+'.*')
         matches=[m[len(wiki_base)+1:] for m in pre_matches]
         if len(matches)>1:
             names=[os.path.basename(m) for m in matches]
             res=dir_listing(matches,names)
         elif matches:
             # we need full file path here, not relative to Wiki
-            res=render_file(os.path.join(wiki_base,matches[0]))
+            res=render_file(matches[0])
 
     return res
 
