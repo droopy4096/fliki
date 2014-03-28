@@ -10,7 +10,8 @@ import glob
 
 from flask import Flask, Response, send_file, render_template_string, render_template, stream_with_context, Markup
 from jinja2 import TemplateNotFound
-from flask_debugtoolbar import DebugToolbarExtension
+### DebugToolbarExtension seems to be disfunctional? :(
+## from flask_debugtoolbar import DebugToolbarExtension
 
 wiki_base='content'
 wiki_compiled='compiled'
@@ -40,13 +41,10 @@ class Wiki(object):
 wiki=Wiki(wiki_base,wiki_compiled)
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'EmbUd/dielMWkrPlY0Dy9szv6X0fvKgX4vCfBaDJOFAmdx6pZDx6A'
-app.config['DEBUG_TB_TEMPLATE_EDITOR_ENABLED']=True
-toolbar = DebugToolbarExtension(app)
 
-# render_template
-# render_template_string
-# return render_template('hello.html', name=name)
-
+### Needed by DebugToolbarExtension
+## app.config['DEBUG_TB_TEMPLATE_EDITOR_ENABLED']=True
+## toolbar = DebugToolbarExtension(app)
 
 # http://flask.pocoo.org/docs/patterns/streaming/#streaming-from-templates
 def stream_template(template_name, **context):
@@ -166,7 +164,6 @@ class RstFile(PlainFile):
                                             settings_overrides=heightened_security_settings)
         with open(fs_compiled_path,'w') as compiled:
             compiled.write(self.unwiki(parts['html_body']))
-
 
 def dir_listing(nodes,aliases=None,title=None):
     if aliases:
