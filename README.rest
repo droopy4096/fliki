@@ -15,6 +15,7 @@ Requirements
   * Jinja2
 
 * docutils
+* whoosh
 
 
 Usage
