@@ -35,9 +35,9 @@ search_template="""
 {% endif %}
 {% if node_list is defined %}
 <ul>
-{% for node,alias in node_list %}
+{% for node,alias,hl in node_list %}
 <li><a href="{{ node }}">{{ alias }}</a>
-  <ul><li>{{ node }}</li></ul>
+  <ul><li>{{ node }}</li><li>{{ hl }}</li></ul>
 </li>
 {% endfor %}
 </ul>
@@ -86,7 +86,7 @@ from whoosh.analysis import StemmingAnalyzer
 class WikiIndexer(object):
     def __init__(self, index_path):
         self.index_path=index_path
-
+    
     def get_schema(self):
         schema = Schema(path=ID(stored=True),
                 name=ID(stored=True),
@@ -177,18 +177,27 @@ class WikiIndexer(object):
         ix = whoosh.index.open_dir(wiki.index_path)
         qp = whoosh.qparser.QueryParser('content',schema=ix.schema)
         q=qp.parse(query)
-        params={'limit':limit}
+        params={'limit':limit, 'scored':True}
         if path:
             # we've got to limit results only to specified path
             params['filter'] = query.Term("path", path)
 
         with ix.searcher() as searcher:
             results=searcher.search(q, **params)
+            # results.fragmeter=whoosh.highlight.SentenceFragmenter()
+            results.fragmeter=whoosh.highlight.ContextFragmenter()
+            hl=whoosh.highlight.Highlighter(fragmenter=results.fragmenter)
+            results.highlighter=hl
             res=[]
             for r in results:
                 row={}
                 for k in r.keys():
                     row[k]=r[k]
+                # row['highlights']=r.highlights('content')
+                with open(r["path"]) as fileobj:
+                    filecontents = fileobj.read()
+                    
+                    row['highlights']=r.highlights("content", top=2, text=unicode(filecontents))
                 res.append( row )
         # app.logger.debug( str(results) )
         return res
@@ -348,15 +357,16 @@ def listdir(fs_path,prepend=None):
 
 def render_file(wiki_path):
     fs_path=os.path.join(wiki.base_path,wiki_path)
-    fn,fe=os.path.splitext(fs_path)
+    ft=ftype(fs_path)
+    ## fn,fe=os.path.splitext(fs_path)
     page=None
     content=None
     template_name='page.html'
-    if fe in ['.rst','.rest']:
+    if ft == 'rst':
         page=RstFile(wiki_path,wiki)
-    elif fe in ['.txt',]:
+    elif ft == 'txt':
         page=PlainFile(wiki_path,wiki)
-    elif fe in ['.htm','.html']:
+    elif ft == 'html':
         page=HtmlFile(wiki_path,wiki)
     elif os.path.exists(fs_path):
         content=send_file(fs_path)
@@ -431,7 +441,7 @@ def search_page(base=''):
             try:
                 app.logger.debug(str(r))
                 r['path']=r['path'][wiki_path_len:]
-                node_list.append((r['path'],r['name']))
+                node_list.append((r['path'],r['name'],r['highlights']))
             except:
                 app.logger.debug('Failed executing "%s"' % ( str(r) ))
 
