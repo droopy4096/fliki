@@ -44,7 +44,7 @@ search_template="""
 {% endif %}
 <form>
 <input name="q" type="text" value="{{ query }}">
-<input type="submit" >
+<input name="search" type="submit" value="search" >
 </form>
 </body></html>
 """
@@ -180,8 +180,9 @@ class WikiIndexer(object):
         params={'limit':limit, 'scored':True}
         if path:
             # we've got to limit results only to specified path
-            params['filter'] = query.Term("path", path)
+            params['filter'] = whoosh.query.Prefix("path", path)
 
+        app.logger.debug('query: '+query+'; path: '+path)
         with ix.searcher() as searcher:
             results=searcher.search(q, **params)
             # results.fragmeter=whoosh.highlight.SentenceFragmenter()
@@ -355,7 +356,38 @@ def listdir(fs_path,prepend=None):
         res.append(item)
     return res
 
-def render_file(wiki_path):
+def file_iterator(wiki_path):
+    fs_full_path=os.path.join(wiki_base,wiki_path)
+    with open(fs_full_path,'r') as f:
+        for l in f:
+            # Disable autoescaping of returned code by
+            # jinja 
+            yield Markup(l)
+    
+
+def acquire_file(filename,wiki_path):
+    """Implement Zope's acquisition"""
+    fs_full_path=os.path.join(wiki_base,wiki_path,filename)
+    # print fs_full_path
+
+    if os.path.exists(fs_full_path):
+        return fs_full_path
+    else:
+        pre_matches=glob.glob(fs_full_path+'.*')
+        matches=[m[len(wiki_base)+1:] for m in pre_matches]
+        if matches:
+            return matches[0]
+        else:
+            # go up one level
+            wiki_dirs=os.path.split(wiki_path)
+            if not ( wiki_dirs[0] == wiki_path ):
+                # print "%s not found, going up to %s" % (filename, wiki_dirs[0])
+                return acquire_file(filename,wiki_dirs[0])
+            else:
+                # print "%s not found in %s, bailing" % ( filename, wiki_path)
+                return None
+
+def _get_page(wiki_path):
     fs_path=os.path.join(wiki.base_path,wiki_path)
     ft=ftype(fs_path)
     ## fn,fe=os.path.splitext(fs_path)
@@ -370,10 +402,32 @@ def render_file(wiki_path):
         page=HtmlFile(wiki_path,wiki)
     elif os.path.exists(fs_path):
         content=send_file(fs_path)
+    return (page,content)
+
+def render_file(wiki_path):
+    fs_path=os.path.join(wiki.base_path,wiki_path)
+    template_name='page.html'
+    ##MOVED ft=ftype(fs_path)
+    ##MOVED ## fn,fe=os.path.splitext(fs_path)
+    ##MOVED page=None
+    ##MOVED content=None
+    ##MOVED if ft == 'rst':
+    ##MOVED     page=RstFile(wiki_path,wiki)
+    ##MOVED elif ft == 'txt':
+    ##MOVED     page=PlainFile(wiki_path,wiki)
+    ##MOVED elif ft == 'html':
+    ##MOVED     page=HtmlFile(wiki_path,wiki)
+    ##MOVED elif os.path.exists(fs_path):
+    ##MOVED     content=send_file(fs_path)
+    page,content=_get_page(wiki_path)
+    sidebar_fs_path=acquire_file('sidebar',wiki_path)
     if page:
         # we don't want to be rude and disable ALL autoescaping
         ## app.jinja_env.autoescape=False
-        return Response(stream_with_context(page.render(template_name,page_title=wiki_path)),mimetype='text/html')
+        if sidebar_fs_path:
+            return Response(stream_with_context(page.render(template_name,page_title=wiki_path, sidebar=file_iterator(sidebar_fs_path))),mimetype='text/html')
+        else:
+            return Response(stream_with_context(page.render(template_name,page_title=wiki_path)),mimetype='text/html')
         ## app.jinja_env.autoescape=True
     elif content:
         return content
@@ -432,7 +486,7 @@ def search_page(base=''):
     if q:
         params['query']=q
         if base:
-            results=idx.search(q,path=base)
+            results=idx.search(q,path=os.path.join(wiki.base_path,base))
         else:
             results=idx.search(q)
         node_list=[]
@@ -441,7 +495,7 @@ def search_page(base=''):
             try:
                 app.logger.debug(str(r))
                 r['path']=r['path'][wiki_path_len:]
-                node_list.append((r['path'],r['name'],r['highlights']))
+                node_list.append((r['path'],r['name'],Markup(r['highlights'])))
             except:
                 app.logger.debug('Failed executing "%s"' % ( str(r) ))
 
