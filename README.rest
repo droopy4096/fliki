@@ -55,3 +55,7 @@ Currently if you add folder "templates"::
 
 under which you can create "dirlist.html" to override default template. More templating is planned in the future.
 
+Freezer
+=======
+
+Freezer is a "compiler" for the content - converting whatever can be converted to static HTML. Freezer script is built using `Frozen Flask <http://pythonhosted.org/Frozen-Flask/>` so follow it's documentation for usage and tuning.
