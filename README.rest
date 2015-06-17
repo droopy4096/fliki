@@ -34,6 +34,14 @@ and execute wiki.py from within my_wiki folder::
 
 point your browser to "localhost:8000" and explore your Wiki
 
+Special URLs
+------------
+
+* /search - invokes site-wide search (using index)
+* /any/path/search - search only under "/any/path" (using index)
+* /reindex - force reindex of the search DB
+* /some/path/file[.ext] - if file with this extension doesn't exist, extension will be dropped and other extensions with the same filename tried.
+
 Customization
 =============
 
