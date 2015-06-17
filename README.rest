@@ -55,7 +55,12 @@ Currently if you add folder "templates"::
 
 under which you can create "dirlist.html" to override default template. More templating is planned in the future.
 
+Scaling
+=======
+
+As per Flask documentation one needs to employ `Standalone WSGI Containers <http://flask.pocoo.org/docs/0.10/deploying/wsgi-standalone/>`_ to scale Flask applications to something that can handle real-world loads.
+
 Freezer
 =======
 
-Freezer is a "compiler" for the content - converting whatever can be converted to static HTML. Freezer script is built using `Frozen Flask <http://pythonhosted.org/Frozen-Flask/>` so follow it's documentation for usage and tuning.
+Freezer is a "compiler" for the content - converting whatever can be converted to static HTML. Freezer script is built using `Frozen Flask <http://pythonhosted.org/Frozen-Flask/>`_ so follow it's documentation for usage and tuning.
